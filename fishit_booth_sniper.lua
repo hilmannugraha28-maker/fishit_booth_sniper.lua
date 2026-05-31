@@ -16,7 +16,7 @@ local jobId   = game.JobId
 
 -- ═══════════ CONFIG ═══════════
 local WEBHOOK_URL      = "https://discord.com/api/webhooks/1510643221406027926/m47QLSX-EZgXLLJAfc_GcTMY8gzYouN8mTu0hnswem3bztNIcHrp7AEuszIyWmIwZwRv"
-local SKIN_WEBHOOK_URL = "https://discord.com/api/webhooks/1510643283032801290/anFd_d8WkeCWZjkmgyDN0dxU5SiJ3z-OiyugpHxEFv9h1T2ldClV4a8jez_ehDQ8h7sz"  -- webhook TERPISAH untuk skin/rod
+local SKIN_WEBHOOK_URL = "https://discord.com/api/webhooks/1510643283032801290/anFd_d8WkeCWZjkmgyDN0dxU5SiJ3z-OiyugpHxEFv9h1T2ldClV4a8jez_ehDQ8h7sz"
 local MAX_PRICE        = 5000
 
 -- ITEM FILTER: Megalodon
@@ -48,7 +48,7 @@ local BLACKLIST_ITEMS = {
 local REHOP_ENABLED  = true       -- auto pindah server setelah scan
 local REHOP_DELAY    = 5          -- delay (detik) sebelum hop
 local SCAN_WAIT      = 8          -- tunggu data load sebelum scan (detik)
-local MIN_PLAYERS    = 5         -- minimal player di server target
+local MIN_PLAYERS    = 10         -- minimal player di server target
 local RETRY_DELAY    = 3          -- delay antar retry join (detik)
 -- ═══════════════════════════════
 
@@ -352,11 +352,18 @@ local function extractBoothItems()
                     if txt:match("%d+%.?%d*kg") then
                         local w = tonumber(txt:match("(%d+%.?%d*)kg")) or 0
                         if w > 0 then itemWeight = w end
+                    elseif txt:lower():find("kilogram") then
+                        local numStr = txt:match("([%d%.]+[KkMm]?)")
+                        if numStr then
+                            local w = parseNumber(numStr)
+                            if w > 0 then itemWeight = w end
+                        end
                     end
 
                     -- Detect item name (text yang bukan angka, bukan berat, bukan RAP)
                     if not txt:match("^%d") and not txt:lower():find("rap")
-                        and not txt:match("kg$") and not txt:lower():find("booth")
+                        and not txt:match("kg$") and not txt:lower():find("kilogram")
+                        and not txt:lower():find("booth")
                         and not txt:lower():find("sold") and not txt:lower():find("buy")
                         and #txt > 2 and #txt < 60 then
                         itemName = itemName or txt
@@ -370,6 +377,8 @@ local function extractBoothItems()
 
                 -- Jika kita punya item dengan harga, simpan
                 if itemName and itemPrice and itemPrice > 0 then
+                    local finalRap = itemRap or 0
+
                     table.insert(items, {
                         uid      = booth.Name.."_"..tostring(#items+1),
                         name     = itemName,
@@ -379,7 +388,7 @@ local function extractBoothItems()
                         variant  = itemVariant or "",
                         rarity   = "",
                         weight   = itemWeight or 0,
-                        rap      = itemRap or 0,
+                        rap      = finalRap,
                         alp      = 0,
                         alpCount = 0,
                         itemType = "Fish",
@@ -434,7 +443,27 @@ local function extractBoothItems()
     end
     deepScan(allRemoteData, "remote", 0)
 
-    return items
+    -- Deduplikasi & Merge RAP (jika GUI gagal detect RAP, ambil dari remote data)
+    local mergedItems = {}
+    local seenKey = {}
+
+    for _, item in ipairs(items) do
+        local key = item.seller .. "_" .. item.name:lower() .. "_" .. item.price
+        if not seenKey[key] then
+            seenKey[key] = item
+            table.insert(mergedItems, item)
+        else
+            local existing = seenKey[key]
+            if existing.rap == 0 and item.rap > 0 then
+                existing.rap = item.rap
+            end
+            if existing.alp == 0 and item.alp > 0 then
+                existing.alp = item.alp
+            end
+        end
+    end
+
+    return mergedItems
 end
 
 -- ═══════════════════════════════
