@@ -15,11 +15,27 @@ local placeId = game.PlaceId
 local jobId   = game.JobId
 
 -- ═══════════ CONFIG ═══════════
-local WEBHOOK_URL    = "https://discord.com/api/webhooks/1510604266094727350/KaePnBfD09tfO6TnzwgteSJq-pqOJEFSDoz9cgOm07v8Se-_z3civS06Z6lQRZibZBuf"
-local MAX_PRICE      = 1500       -- harga MAKSIMAL (tokens) untuk di-list
--- ITEM FILTER
+local WEBHOOK_URL      = "https://discord.com/api/webhooks/1510643221406027926/m47QLSX-EZgXLLJAfc_GcTMY8gzYouN8mTu0hnswem3bztNIcHrp7AEuszIyWmIwZwRv"
+local SKIN_WEBHOOK_URL = "https://discord.com/api/webhooks/1510643283032801290/anFd_d8WkeCWZjkmgyDN0dxU5SiJ3z-OiyugpHxEFv9h1T2ldClV4a8jez_ehDQ8h7sz"  -- webhook TERPISAH untuk skin/rod
+local MAX_PRICE        = 1500
+
+-- ITEM FILTER: Megalodon
 local TRACKED_ITEMS = {
-    "megalodon",              -- ALL megalodon (Galaxy, Frozen, Bermutasi, Ghost, dll)
+    "megalodon",
+}
+
+-- ITEM FILTER: Skin / Rod / Accessories (webhook terpisah)
+local TRACKED_SKINS = {
+    "wings of everlove", "aether monarch", "holy trident", "kitty guitar",
+    "corruption edge", "binary edge", "christmas parasol", "princess parasol",
+    "mega hovercraft", "undead guitar", "void guitar", "enlightened",
+    "golden clockwork", "fallen staff", "cloud weaver", "blackhole sword",
+    "reaver scythe", "sea eater", "crimson rose", "frozen jetski",
+    "sharki", "void craft", "kitty halo", "candy cane trident",
+    "crimson retribution", "penguin", "celestial scythe", "axolotl",
+    "draconic soul", "empyrean staff", "abyssal chroma", "cupid's harp",
+    "frozen krampus scythe", "electric guitar", "kraken anchor",
+    "heartfelt blade", "divine blade", "alpha floaty", "jelly",
 }
 
 -- BLACKLIST: item ini TIDAK akan ditampilkan
@@ -54,6 +70,19 @@ local function isTrackedItem(itemName)
     if isBlacklisted(itemName) then return false end
     local lower = itemName:lower()
     for _, keyword in ipairs(TRACKED_ITEMS) do
+        if lower:find(keyword, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Cek apakah item cocok SKIN list
+local function isSkinItem(itemName)
+    if not itemName then return false end
+    if isBlacklisted(itemName) then return false end
+    local lower = itemName:lower()
+    for _, keyword in ipairs(TRACKED_SKINS) do
         if lower:find(keyword, 1, true) then
             return true
         end
@@ -104,10 +133,11 @@ local function fmt(n)
     return s:reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,","")
 end
 
-local function sendWebhook(payload)
+local function sendWebhook(payload, webhookUrl)
+    local url = webhookUrl or WEBHOOK_URL
     pcall(function()
         httpFunc({
-            Url = WEBHOOK_URL, Method = "POST",
+            Url = url, Method = "POST",
             Headers = {["Content-Type"] = "application/json"},
             Body = HttpService:JSONEncode(payload)
         })
@@ -179,6 +209,15 @@ local function findAllBooths()
             end
         end
     end
+
+    -- Tambahkan juga karakter pemain (detect item yg dijual langsung oleh player tanpa booth)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character and plr.Character.Parent == Workspace and not seen[plr.Character] then
+            seen[plr.Character] = true
+            table.insert(booths, plr.Character)
+        end
+    end
+
     return booths
 end
 
@@ -588,6 +627,73 @@ local function sendSnipesToDiscord(snipes)
     print("✅ Dikirim "..maxItems.." item ke Discord!")
 end
 
+-- Kirim SKIN snipes ke Discord (embed TERPISAH, warna beda)
+local function sendSkinSnipesToDiscord(snipes)
+    local newSnipes = {}
+    for _, s in ipairs(snipes) do
+        local key = s.uid .. "_" .. s.price .. "_skin"
+        if not snipeLog[key] then
+            snipeLog[key] = os.clock()
+            table.insert(newSnipes, s)
+        end
+    end
+    if #newSnipes == 0 then return end
+
+    local maxItems = math.min(25, #newSnipes)
+
+    local teleportScript = string.format(
+        'game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)',
+        placeId, jobId
+    )
+
+    local joinLink = string.format(
+        "https://www.roblox.com/games/start?placeId=%d&gameInstanceId=%s",
+        placeId, jobId
+    )
+    local desc = string.format(
+        "**Server:** `%s`\n".."**Scanner:** @%s\n".."**Total:** %d item (max %d tokens)\n\n".."[Join Server](%s)\n\n".."**Join Script:**\n```\n%s\n```",
+        jobId:sub(1,12), player.Name, maxItems, MAX_PRICE, joinLink, teleportScript
+    )
+
+    local fields = {}
+    for i = 1, maxItems do
+        local s = newSnipes[i]
+        local rapStr = s.rap > 0 and fmt(s.rap) or "N/A"
+        local rapPct = s.rapPct or 0
+        local saveStr = s.save ~= 0 and fmt(s.save) or "0"
+        local alpStr = s.alpStr or "N/A"
+
+        local fieldValue = string.format(
+            "Nama: **%s**\nHarga: **%s Tokens**\nSeller: %s\nRAP: **%s** (%d%%)\nSave: **%s Tokens**\nALP: **%s**",
+            s.name, fmt(s.price), s.seller, rapStr, rapPct, saveStr, alpStr
+        )
+
+        table.insert(fields, {
+            name = "#" .. i .. " ITEM",
+            value = fieldValue,
+            inline = true
+        })
+    end
+
+    local embed = {
+        title       = "Skin/Rod/Acc " .. MAX_PRICE .. " Tokens!",
+        description = desc,
+        color       = 15105570, -- orange
+        fields      = fields,
+        footer      = {
+            text = "Fish It Sniper | @"..player.Name.." | "..os.date("%d/%m/%Y %H:%M")
+        }
+    }
+
+    sendWebhook({
+        username   = "Fish It Skin Sniper",
+        avatar_url = "https://tr.rbxcdn.com/180DAY-"..player.UserId,
+        embeds     = { embed }
+    }, SKIN_WEBHOOK_URL)
+
+    print("Dikirim "..maxItems.." skin item ke Discord!")
+end
+
 -- ═══════════════════════════════
 -- SCAN FUNCTION
 -- ═══════════════════════════════
@@ -603,75 +709,81 @@ local function doScan()
     local allItems = extractBoothItems()
     print("📦 Ditemukan "..#allItems.." listing total di booth")
 
-    -- Filter: hanya item yang di-track
-    local items = {}
+    -- Filter: megalodon vs skin
+    local megaItems = {}
+    local skinItems = {}
     for _, item in ipairs(allItems) do
         local name = resolveItemName(item)
         if isTrackedItem(name) or isTrackedItem(item.name) then
-            table.insert(items, item)
+            table.insert(megaItems, item)
+        elseif isSkinItem(name) or isSkinItem(item.name) then
+            table.insert(skinItems, item)
         end
     end
 
-    -- Sort: megalodon paling atas, lalu by harga termurah
-    table.sort(items, function(a, b)
-        local aName = resolveItemName(a):lower()
-        local bName = resolveItemName(b):lower()
-        local aMega = aName:find("megalodon") and true or false
-        local bMega = bName:find("megalodon") and true or false
-        if aMega ~= bMega then return aMega end
-        return a.price < b.price
-    end)
+    -- Sort by harga termurah
+    table.sort(megaItems, function(a, b) return a.price < b.price end)
+    table.sort(skinItems, function(a, b) return a.price < b.price end)
 
-    print("🎯 Tracked items: "..#items.." dari "..#allItems.." total")
+    local totalTracked = #megaItems + #skinItems
+    print("🎯 Megalodon: "..#megaItems.." | Skin/Rod: "..#skinItems.." | Total: "..totalTracked.." dari "..#allItems)
 
     if #allItems == 0 then
         print("⚠️ Tidak ada listing terdeteksi!")
-        print("   Menjalankan booth structure dump untuk debug...")
         dumpBoothStructure()
         return
     end
 
-    if #items == 0 then
-        print("❌ Tidak ada item yang di-track di server ini")
+    if totalTracked == 0 then
+        print("❌ Tidak ada megalodon/skin di server ini")
         return
     end
 
-    -- Print semua listing
-    print("\n📋 Listing ("..#items.." item):")
-    print("  ┌─────────────────────────────────────────────────────────┐")
-    for i, item in ipairs(items) do
-        local name = resolveItemName(item)
-        local rapStr = item.rap > 0 and fmt(item.rap) or "N/A"
-        print(string.format("  │ #%d  🎣 %s", i, name))
-        print(string.format("  │     💰 Harga: %s Tokens  |  📊 RAP: %s", fmt(item.price), rapStr))
-        print(string.format("  │     👤 Seller: %s  |  📍 %s", item.seller, item.path:sub(1,40)))
-        if item.rap > 0 and item.price < item.rap then
-            local save = item.rap - item.price
-            local pct = math.floor((item.price / item.rap) * 100)
-            print(string.format("  │     🔥 DEAL! %s%% of RAP (Save %s tokens)", pct, fmt(save)))
+    -- Print MEGALODON
+    if #megaItems > 0 then
+        print("\n🐟 MEGALODON ("..#megaItems.." item):")
+        for i, item in ipairs(megaItems) do
+            local name = resolveItemName(item)
+            local rapStr = item.rap > 0 and fmt(item.rap) or "N/A"
+            print(string.format("  #%d %s | %s Tokens | RAP: %s | Seller: %s",
+                i, name, fmt(item.price), rapStr, item.seller))
         end
-        print("  │")
     end
-    print("  └─────────────────────────────────────────────────────────┘")
 
-    -- Cari snipe (harga <= MAX_PRICE)
-    local snipes = findSnipes(items)
-    if #snipes > 0 then
-        print("\n🔥 ITEMS ≤ "..MAX_PRICE.." TOKENS: "..#snipes)
-        for i, s in ipairs(snipes) do
-            local rapStr = s.rap > 0 and fmt(s.rap) or "N/A"
-            print(string.format("  🔥 #%d %s → %s Tokens | RAP: %s | Seller: %s",
-                i, s.name, fmt(s.price), rapStr, s.seller))
+    -- Print SKINS
+    if #skinItems > 0 then
+        print("\n🎣 SKIN/ROD ("..#skinItems.." item):")
+        for i, item in ipairs(skinItems) do
+            local name = resolveItemName(item)
+            local rapStr = item.rap > 0 and fmt(item.rap) or "N/A"
+            print(string.format("  #%d %s | %s Tokens | RAP: %s | Seller: %s",
+                i, name, fmt(item.price), rapStr, item.seller))
         end
+    end
 
-        -- Kirim ke Discord
-        if WEBHOOK_URL ~= "GANTI_WEBHOOK_DISCORD_KAMU" then
-            sendSnipesToDiscord(snipes)
+    -- Kirim ke Discord (TERPISAH)
+    local megaSnipes = findSnipes(megaItems)
+    if #megaSnipes > 0 then
+        print("\n🔥 MEGALODON ≤ "..MAX_PRICE.." TOKENS: "..#megaSnipes)
+        if WEBHOOK_URL ~= "GANTI_WEBHOOK_DISCORD_KAMU" and WEBHOOK_URL ~= "" then
+            sendSnipesToDiscord(megaSnipes)
         else
-            print("⚠️ Webhook belum diset! Ganti WEBHOOK_URL di config.")
+            print("⚠️ Webhook Megalodon belum diset!")
         end
-    else
-        print("❌ Tidak ada item dengan harga ≤ "..MAX_PRICE.." tokens")
+    end
+
+    local skinSnipes = findSnipes(skinItems)
+    if #skinSnipes > 0 then
+        print("\n🎣 SKIN/ROD ≤ "..MAX_PRICE.." TOKENS: "..#skinSnipes)
+        if SKIN_WEBHOOK_URL ~= "GANTI_SKIN_WEBHOOK_URL" and SKIN_WEBHOOK_URL ~= "" then
+            sendSkinSnipesToDiscord(skinSnipes)
+        else
+            print("⚠️ Webhook Skin belum diset!")
+        end
+    end
+
+    if #megaSnipes == 0 and #skinSnipes == 0 then
+        print("❌ Tidak ada item ≤ "..MAX_PRICE.." tokens")
     end
 end
 
