@@ -556,8 +556,8 @@ end
 local function findSnipes(items)
     local snipes = {}
     for _, item in ipairs(items) do
-        -- Skip item milik sendiri
-        if item.seller == player.Name then continue end
+        -- (Dinonaktifkan agar kamu bisa ngetes item kamu sendiri)
+        -- if item.seller == player.Name then continue end
 
         local price = item.price
         local rap = item.rap
