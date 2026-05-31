@@ -35,7 +35,7 @@ local TRACKED_SKINS = {
     "crimson retribution", "penguin", "celestial scythe", "axolotl",
     "draconic soul", "empyrean staff", "abyssal chroma", "cupid's harp",
     "frozen krampus scythe", "electric guitar", "kraken anchor",
-    "heartfelt blade", "divine blade", "alpha floaty", "jelly",
+    "heartfelt blade", "divine blade", "alpha floaty", "jelly", "Capybara"
 }
 
 -- BLACKLIST: item ini TIDAK akan ditampilkan
