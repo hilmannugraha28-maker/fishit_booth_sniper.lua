@@ -17,7 +17,7 @@ local jobId   = game.JobId
 -- ═══════════ CONFIG ═══════════
 local WEBHOOK_URL      = "https://discord.com/api/webhooks/1510643221406027926/m47QLSX-EZgXLLJAfc_GcTMY8gzYouN8mTu0hnswem3bztNIcHrp7AEuszIyWmIwZwRv"
 local SKIN_WEBHOOK_URL = "https://discord.com/api/webhooks/1510643283032801290/anFd_d8WkeCWZjkmgyDN0dxU5SiJ3z-OiyugpHxEFv9h1T2ldClV4a8jez_ehDQ8h7sz"  -- webhook TERPISAH untuk skin/rod
-local MAX_PRICE        = 1500
+local MAX_PRICE        = 5000
 
 -- ITEM FILTER: Megalodon
 local TRACKED_ITEMS = {
@@ -48,7 +48,7 @@ local BLACKLIST_ITEMS = {
 local REHOP_ENABLED  = true       -- auto pindah server setelah scan
 local REHOP_DELAY    = 5          -- delay (detik) sebelum hop
 local SCAN_WAIT      = 8          -- tunggu data load sebelum scan (detik)
-local MIN_PLAYERS    = 10         -- minimal player di server target
+local MIN_PLAYERS    = 5         -- minimal player di server target
 local RETRY_DELAY    = 3          -- delay antar retry join (detik)
 -- ═══════════════════════════════
 
