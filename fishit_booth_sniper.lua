@@ -35,7 +35,7 @@ local TRACKED_SKINS = {
     "crimson retribution", "penguin", "celestial scythe", "axolotl",
     "draconic soul", "empyrean staff", "abyssal chroma", "cupid's harp",
     "frozen krampus scythe", "electric guitar", "kraken anchor",
-    "heartfelt blade", "divine blade", "alpha floaty", "jelly", "Capybara"
+    "heartfelt blade", "divine blade", "alpha floaty", "jelly", "capybara"
 }
 
 -- BLACKLIST: item ini TIDAK akan ditampilkan
@@ -218,6 +218,18 @@ local function findAllBooths()
         end
     end
 
+    -- Tambahkan juga semua GUI yg melayang di Workspace (jika game menaruh GUI di luar karakter/booth)
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if (desc:IsA("BillboardGui") or desc:IsA("SurfaceGui")) and not seen[desc] then
+            local path = desc:GetFullName():lower()
+            local isMenu = path:find("menu") or path:find("worldsetup") or path:find("shop")
+            if not isMenu then
+                seen[desc] = true
+                table.insert(booths, desc)
+            end
+        end
+    end
+
     return booths
 end
 
@@ -301,6 +313,18 @@ local function extractBoothItems()
             end
         end
 
+        -- Cara 1.5: Jika booth adalah GUI, cek Adornee nya (biasanya karakter pemain)
+        if seller == "Unknown" and (booth:IsA("BillboardGui") or booth:IsA("SurfaceGui")) and booth.Adornee then
+            local p = booth.Adornee
+            while p and p ~= Workspace do
+                if playerNames[p.Name:lower()] then
+                    seller = playerNames[p.Name:lower()]
+                    break
+                end
+                p = p.Parent
+            end
+        end
+
         -- Cara 2: Fallback ke parent model name atau booth name
         if seller == "Unknown" then
             -- Cek parent models untuk nama player
@@ -322,11 +346,20 @@ local function extractBoothItems()
         end
 
         -- Scan semua GUI di booth
+        local guisToProcess = {}
+        if booth:IsA("BillboardGui") or booth:IsA("SurfaceGui") or booth:IsA("Frame") then
+            table.insert(guisToProcess, booth)
+        end
         for _, desc in ipairs(booth:GetDescendants()) do
             if desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") or desc:IsA("Frame") then
-                local texts = collectTexts(desc)
+                table.insert(guisToProcess, desc)
+            end
+        end
 
-                -- Coba extract item data dari text labels
+        for _, gui in ipairs(guisToProcess) do
+            local texts = collectTexts(gui)
+
+            -- Coba extract item data dari text labels
                 local itemName, itemPrice, itemRap, itemWeight, itemVariant = nil, nil, nil, nil, nil
 
                 for _, t in ipairs(texts) do
@@ -637,7 +670,7 @@ local function sendSnipesToDiscord(snipes)
     end
 
     local embed = {
-        title       = "🐟 Megalodon ≤ "..MAX_PRICE.." Tokens!",
+        title       = "Megalodon <= "..MAX_PRICE.." Tokens!",
         description = desc,
         color       = 3066993,
         fields      = fields,
@@ -648,7 +681,7 @@ local function sendSnipesToDiscord(snipes)
     }
 
     sendWebhook({
-        username   = "🐟 Fish It Booth Sniper",
+        username   = "Fish It Booth Sniper",
         avatar_url = "https://tr.rbxcdn.com/180DAY-"..player.UserId,
         embeds     = { embed }
     })
@@ -680,7 +713,11 @@ local function sendSkinSnipesToDiscord(snipes)
         placeId, jobId
     )
     local desc = string.format(
-        "**Server:** `%s`\n".."**Scanner:** @%s\n".."**Total:** %d item (max %d tokens)\n\n".."[Join Server](%s)\n\n".."**Join Script:**\n```\n%s\n```",
+        "**Server:** `%s`\n"..
+        "**Scanner:** @%s\n"..
+        "**Total:** %d item (max %d tokens)\n\n"..
+        "🔗 **[Join Server](%s)**\n\n"..
+        "**Join Script:**\n```\n%s\n```",
         jobId:sub(1,12), player.Name, maxItems, MAX_PRICE, joinLink, teleportScript
     )
 
@@ -693,19 +730,29 @@ local function sendSkinSnipesToDiscord(snipes)
         local alpStr = s.alpStr or "N/A"
 
         local fieldValue = string.format(
-            "Nama: **%s**\nHarga: **%s Tokens**\nSeller: %s\nRAP: **%s** (%d%%)\nSave: **%s Tokens**\nALP: **%s**",
-            s.name, fmt(s.price), s.seller, rapStr, rapPct, saveStr, alpStr
+            "Nama: **%s**\n"..
+            "Harga: **%s Tokens**\n"..
+            "Seller: %s\n"..
+            "RAP: **%s** (%d%%)\n"..
+            "Save: **%s Tokens**\n"..
+            "ALP: **%s**",
+            s.name,
+            fmt(s.price),
+            s.seller,
+            rapStr, rapPct,
+            saveStr,
+            alpStr
         )
 
         table.insert(fields, {
-            name = "#" .. i .. " ITEM",
+            name = "🔥 #" .. i .. " SNIPE",
             value = fieldValue,
             inline = true
         })
     end
 
     local embed = {
-        title       = "Skin/Rod/Acc " .. MAX_PRICE .. " Tokens!",
+        title       = "Skin/Rod/Acc <= "..MAX_PRICE.." Tokens!",
         description = desc,
         color       = 15105570, -- orange
         fields      = fields,
