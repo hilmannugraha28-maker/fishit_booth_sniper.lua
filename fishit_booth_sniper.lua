@@ -22,6 +22,12 @@ local TRACKED_ITEMS = {
     "megalodon",              -- ALL megalodon (Galaxy, Frozen, Bermutasi, Ghost, dll)
 }
 
+-- BLACKLIST: item ini TIDAK akan ditampilkan
+local BLACKLIST_ITEMS = {
+    "pirate",
+    "strawberry choc",
+}
+
 -- SERVER HOP CONFIG
 local REHOP_ENABLED  = true       -- auto pindah server setelah scan
 local REHOP_DELAY    = 5          -- delay (detik) sebelum hop
@@ -30,9 +36,22 @@ local MIN_PLAYERS    = 10         -- minimal player di server target
 local RETRY_DELAY    = 3          -- delay antar retry join (detik)
 -- ═══════════════════════════════
 
--- Cek apakah item name cocok dengan tracked items
+-- Cek apakah item di-blacklist
+local function isBlacklisted(itemName)
+    if not itemName then return false end
+    local lower = itemName:lower()
+    for _, keyword in ipairs(BLACKLIST_ITEMS) do
+        if lower:find(keyword, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Cek apakah item cocok tracked items (dan BUKAN blacklist)
 local function isTrackedItem(itemName)
     if not itemName then return false end
+    if isBlacklisted(itemName) then return false end
     local lower = itemName:lower()
     for _, keyword in ipairs(TRACKED_ITEMS) do
         if lower:find(keyword, 1, true) then
@@ -202,10 +221,66 @@ local function extractBoothItems()
     local booths = findAllBooths()
 
     for _, booth in ipairs(booths) do
-        -- Cari seller name dari booth name (contoh: "Riyy's Booth" → "Riyy")
-        local seller = booth.Name:gsub("'s Booth", ""):gsub("'s booth", "")
-            :gsub(" Booth", ""):gsub(" booth", "")
-        if seller == "" then seller = "Unknown" end
+        -- === DETECT SELLER NAME ===
+        local seller = "Unknown"
+
+        -- Cara 1: Cari TextLabel yang berisi nama player di booth
+        local playerNames = {}
+        for _, plr in ipairs(Players:GetPlayers()) do
+            playerNames[plr.Name:lower()] = plr.Name
+            if plr.DisplayName then
+                playerNames[plr.DisplayName:lower()] = plr.DisplayName
+            end
+        end
+
+        for _, desc in ipairs(booth:GetDescendants()) do
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                local txt = desc.Text or ""
+                local lbl = desc.Name:lower()
+
+                -- Cek label yang mengandung "owner", "seller", "player"
+                if lbl:find("owner") or lbl:find("seller") or lbl:find("player")
+                    or lbl:find("name") or lbl:find("user") then
+                    if txt ~= "" and #txt < 30 then
+                        seller = txt:gsub("'s Booth", ""):gsub("'s booth", "")
+                        break
+                    end
+                end
+
+                -- Cek apakah text cocok dengan nama player di server
+                if txt ~= "" and playerNames[txt:lower()] then
+                    seller = playerNames[txt:lower()]
+                    break
+                end
+
+                -- Cek format "PlayerName's Booth"
+                local nameFromBooth = txt:match("^(.+)'s [Bb]ooth")
+                if nameFromBooth then
+                    seller = nameFromBooth
+                    break
+                end
+            end
+        end
+
+        -- Cara 2: Fallback ke parent model name atau booth name
+        if seller == "Unknown" then
+            -- Cek parent models untuk nama player
+            local parent = booth.Parent
+            while parent and parent ~= Workspace do
+                if playerNames[parent.Name:lower()] then
+                    seller = playerNames[parent.Name:lower()]
+                    break
+                end
+                parent = parent.Parent
+            end
+        end
+
+        -- Cara 3: Fallback ke booth name
+        if seller == "Unknown" then
+            seller = booth.Name:gsub("'s Booth", ""):gsub("'s booth", "")
+                :gsub(" Booth", ""):gsub(" booth", "")
+            if seller == "" or seller == "Boot" then seller = "Unknown" end
+        end
 
         -- Scan semua GUI di booth
         for _, desc in ipairs(booth:GetDescendants()) do
