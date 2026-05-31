@@ -848,31 +848,48 @@ end
 -- QUEUE ON TELEPORT (auto re-execute)
 -- ═══════════════════════════════
 local function setupAutoExecute()
-    -- Coba queue script untuk dijalankan ulang setelah teleport
-    local scriptSource = nil
+    -- Cara 1: Pakai GitHub raw URL (RECOMMENDED)
+    local scriptURL = nil
     pcall(function()
-        -- Baca source script ini
-        if getgenv and getgenv().FISH_SNIPER_SOURCE then
-            scriptSource = getgenv().FISH_SNIPER_SOURCE
+        if getgenv and getgenv().FISH_SCRIPT_URL then
+            scriptURL = getgenv().FISH_SCRIPT_URL
         end
     end)
 
-    -- queue_on_teleport tersedia di kebanyakan executor
+    -- Build queue script (ASCII ONLY - no emoji!)
+    local queueScript
+    if scriptURL then
+        queueScript = 'task.wait(5)\n'
+            .. 'print("[Fish It Sniper] Re-executing from URL...")\n'
+            .. 'loadstring(game:HttpGet("' .. scriptURL .. '"))()'
+        print("✅ Auto-execute via URL: "..scriptURL:sub(1,50).."...")
+    else
+        -- Fallback: print instruksi saja
+        queueScript = 'task.wait(3)\nprint("[Fish It Sniper] Set getgenv().FISH_SCRIPT_URL untuk auto-execute!")'
+        print("⚠️ Tidak ada URL untuk auto-execute!")
+        print("   💡 Jalankan seperti ini:")
+        print('   getgenv().FISH_SCRIPT_URL = "https://raw.githubusercontent.com/USER/REPO/main/fishit_booth_sniper.lua"')
+        print('   loadstring(game:HttpGet(getgenv().FISH_SCRIPT_URL))()')
+    end
+
+    -- Queue ke executor
+    local queued = false
     if queue_on_teleport then
-        local queueScript = scriptSource or
-            '-- Auto re-execute Fish It Sniper after teleport\n'
-            ..'print("🔄 Re-executing Fish It Sniper...")\n'
-            ..'task.wait(3)\n'
-            ..'-- Script akan dijalankan ulang otomatis oleh executor'
-        pcall(queue_on_teleport, queueScript)
+        pcall(function() queue_on_teleport(queueScript) end)
+        queued = true
         print("✅ queue_on_teleport terpasang!")
     elseif syn and syn.queue_on_teleport then
-        pcall(syn.queue_on_teleport, "-- auto rehop")
+        pcall(function() syn.queue_on_teleport(queueScript) end)
+        queued = true
         print("✅ syn.queue_on_teleport terpasang!")
-    else
+    elseif fluxus and fluxus.queue_on_teleport then
+        pcall(function() fluxus.queue_on_teleport(queueScript) end)
+        queued = true
+        print("✅ fluxus.queue_on_teleport terpasang!")
+    end
+
+    if not queued then
         print("⚠️ queue_on_teleport tidak tersedia!")
-        print("   Script TIDAK akan auto-execute setelah teleport.")
-        print("   Kamu perlu jalankan ulang script manual setelah hop.")
     end
 end
 
